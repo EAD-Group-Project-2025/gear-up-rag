@@ -81,8 +81,16 @@ class RAGService:
                 # Calculate processing time
                 processing_time = int((time.time() - start_time) * 1000)
                 
-                # Store in chat history
-                await self._save_to_history(session_id, question, appointment_response)
+                # Store in chat history with metadata
+                await self._save_to_history(
+                    session_id=session_id, 
+                    question=question, 
+                    answer=appointment_response,
+                    confidence_score=0.9,  # High confidence for API calls
+                    from_cache=False,
+                    processing_time_ms=processing_time,
+                    user_id=customer_id
+                )
                 
                 return ChatResponse(
                     answer=appointment_response,
@@ -122,8 +130,16 @@ class RAGService:
             # Calculate confidence based on relevance scores
             confidence = self._calculate_confidence(relevant_docs)
             
-            # Store in chat history (async)
-            await self._save_to_history(session_id, question, answer)
+            # Store in chat history with metadata
+            await self._save_to_history(
+                session_id=session_id, 
+                question=question, 
+                answer=answer,
+                confidence_score=confidence,
+                from_cache=False,
+                processing_time_ms=processing_time,
+                user_id=None  # Can be passed in later if needed
+            )
             
             return ChatResponse(
                 answer=answer,
@@ -240,10 +256,27 @@ class RAGService:
     
     # Private helper methods
     
-    async def _save_to_history(self, session_id: str, question: str, answer: str) -> None:
-        """Save question and answer to database"""
+    async def _save_to_history(
+        self, 
+        session_id: str, 
+        question: str, 
+        answer: str,
+        confidence_score: float = None,
+        from_cache: bool = False,
+        processing_time_ms: int = None,
+        user_id: int = None
+    ) -> None:
+        """Save question and answer to database with additional metadata"""
         try:
-            await save_chat_message(session_id, question, answer)
+            await save_chat_message(
+                session_id=session_id, 
+                question=question, 
+                answer=answer,
+                confidence_score=confidence_score,
+                from_cache=from_cache,
+                processing_time_ms=processing_time_ms,
+                user_id=user_id
+            )
         except Exception as e:
             logger.error(f"Failed to save chat history: {e}")
     

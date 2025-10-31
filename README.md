@@ -1,53 +1,212 @@
 # 🤖 GearUp AI Chatbot Service
 
-Python FastAPI service for RAG-based chatbot using Google Gemini.
+Advanced Python FastAPI service implementing RAG (Retrieval-Augmented Generation) architecture with Google Gemini LLM for intelligent vehicle service appointment assistance.
 
-## Features
+## 🏗️ Architecture Overview
 
-- ✅ Google Gemini LLM integration
-- ✅ RAG (Retrieval-Augmented Generation)
-- ✅ Vector database (Pinecone/FAISS)
-- ✅ Real-time database embeddings
-- ✅ Streaming responses (SSE)
-- ✅ Async processing
-- ✅ Automatic context retrieval
+This service implements a sophisticated RAG pipeline combining:
+- **Vector Database**: Semantic search through FAISS/Pinecone
+- **LLM Integration**: Google Gemini 2.0 Flash for response generation
+- **Contextual Retrieval**: Dynamic document filtering and ranking
+- **Streaming Interface**: Real-time SSE responses
+- **Persistent Storage**: PostgreSQL for chat history and appointment data
 
-## Quick Start
+### Core Components
 
-### 1. Install Dependencies
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   FastAPI App   ├────┤   RAG Service    ├────┤  Gemini LLM     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │                       
+         │                       ▼                       
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  Chat History   ├────┤ Vector Database  ├────┤   Embeddings    │
+│   PostgreSQL    │    │  (FAISS/Pinecone)│    │  SentenceT5     │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+```
 
+## 🚀 Features
+
+### 🔍 RAG Implementation
+- **Semantic Search**: Uses `all-MiniLM-L6-v2` embeddings (384-dim)
+- **Context Retrieval**: Top-K document matching with relevance scoring
+- **Dynamic Filtering**: Appointment date and service type filters
+- **Confidence Scoring**: Automatic response confidence calculation
+
+### 🧠 LLM Integration
+- **Google Gemini 2.0 Flash**: Latest model with streaming support
+- **Safety Controls**: Built-in content filtering and safety settings
+- **Conversation Memory**: Multi-turn conversation handling
+- **Prompt Engineering**: Optimized system instructions for vehicle services
+
+### 📊 Vector Database Options
+- **FAISS (Local)**: High-performance similarity search, persistent storage
+- **Pinecone (Cloud)**: Managed vector database with serverless scaling
+- **Dual Support**: Runtime switching between vector database providers
+
+### 🌊 Streaming Architecture
+- **Server-Sent Events**: Real-time response streaming
+- **Chunked Processing**: Incremental content delivery
+- **Session Management**: Persistent conversation tracking
+
+### 📈 Performance Features
+- **Async Processing**: Non-blocking I/O operations
+- **Connection Pooling**: Efficient database connections
+- **Caching Strategy**: Optimized embedding storage and retrieval
+- **Error Handling**: Comprehensive exception management
+
+## 🛠️ Installation & Setup
+
+### Prerequisites
+- Python 3.11+
+- PostgreSQL 12+
+- CUDA (optional, for GPU acceleration)
+
+### 1. Clone Repository
 ```bash
+git clone https://github.com/EAD-Group-Project-2025/gear-up-rag.git
+cd gear-up-rag
+```
+
+### 2. Install Dependencies
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install requirements
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
-
-Copy `.env.example` to `.env` and update:
+### 3. Environment Configuration
+Copy `.env.example` to `.env` and configure:
 
 ```env
-GEMINI_API_KEY=your_key_here
-DATABASE_URL=postgresql+asyncpg://user:pass@host/db
-USE_FAISS=true
+# LLM Configuration
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.0-flash-exp
+
+# Database Configuration
+DATABASE_URL=postgresql+asyncpg://user:password@localhost/gearup_db
+
+# Vector Database (Choose one)
+USE_PINECONE=false
+PINECONE_API_KEY=your_pinecone_key  # If using Pinecone
+PINECONE_ENVIRONMENT=us-east-1
+PINECONE_INDEX_NAME=gearup-chatbot
+
+# FAISS Configuration (Local)
+FAISS_INDEX_PATH=./data/faiss_index
+
+# Embedding Model
+EMBEDDING_MODEL=all-MiniLM-L6-v2
+MAX_CONTEXT_DOCS=5
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
 ```
 
-### 3. Run Server
-
+### 4. Database Setup
 ```bash
-uvicorn main:app --reload
+# Create PostgreSQL database
+createdb gearup_db
+
+# Run migrations (if using Alembic)
+alembic upgrade head
 ```
 
-Server will start at: http://localhost:8000
+### 5. Launch Service
+```bash
+# Development mode
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-## API Endpoints
+# Production mode
+uvicorn main:app --workers 4 --host 0.0.0.0 --port 8000
+```
 
-- `GET /` - Root endpoint
-- `GET /health` - Health check
-- `POST /chat` - Send chat message
-- `POST /chat/stream` - Stream chat response
-- `POST /embeddings/update` - Update embeddings
-- `GET /stats` - Get statistics
+## 📡 API Reference
 
-## Documentation
+### Core Endpoints
+
+#### Chat Completion
+```http
+POST /chat
+Content-Type: application/json
+
+{
+  "question": "When is my next appointment?",
+  "sessionId": "user_123",
+  "conversationHistory": [
+    {"role": "user", "content": "Hello"},
+    {"role": "assistant", "content": "Hi! How can I help?"}
+  ],
+  "appointmentDate": "2024-12-01",
+  "serviceType": "oil_change",
+  "customerId": 12345,
+  "customerEmail": "user@example.com",
+  "authToken": "jwt_token_here"
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "Your next appointment is scheduled for...",
+  "session_id": "user_123",
+  "from_cache": false,
+  "processing_time_ms": 1250,
+  "timestamp": "2024-11-01T10:30:00Z",
+  "confidence": 0.92,
+  "sources": ["appointment_api", "service_catalog"]
+}
+```
+
+#### Streaming Chat
+```http
+POST /chat/stream
+Content-Type: application/json
+
+{
+  "question": "Tell me about brake service options",
+  "sessionId": "user_123"
+}
+```
+
+**Response (SSE):**
+```
+data: {"content": "I'd be happy to", "is_final": false, "session_id": "user_123", "chunk_index": 0}
+
+data: {"content": " help you with brake service options...", "is_final": false, "session_id": "user_123", "chunk_index": 1}
+
+data: {"content": "", "is_final": true, "session_id": "user_123", "chunk_index": 2}
+```
+
+### Management Endpoints
+
+#### Update Vector Embeddings
+```http
+POST /embeddings/update
+```
+Manually refresh vector database from PostgreSQL appointment data.
+
+#### Chat History
+```http
+# Get history
+GET /chat/history/{session_id}?limit=10
+
+# Clear history
+DELETE /chat/history/{session_id}
+```
+
+#### Service Statistics
+```http
+GET /stats
+```
+Returns RAG service performance metrics and availability status.
+
+## 🔧 Technical Deep Dive
 
 - Interactive API docs: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc

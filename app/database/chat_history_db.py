@@ -28,6 +28,10 @@ async def save_chat_message(
     session_id: str,
     question: str,
     answer: str,
+    confidence_score: float = None,
+    from_cache: bool = False,
+    processing_time_ms: int = None,
+    user_id: int = None,
     session: AsyncSession = None
 ) -> None:
     """
@@ -37,19 +41,34 @@ async def save_chat_message(
         session_id: Session identifier
         question: User question
         answer: Bot answer
+        confidence_score: Optional confidence score
+        from_cache: Whether response was from cache
+        processing_time_ms: Processing time in milliseconds
+        user_id: Optional user ID
         session: Optional database session
     """
     try:
         if session is None:
             session_maker = get_async_session()
             async with session_maker() as session:
-                return await save_chat_message(session_id, question, answer, session)
+                return await save_chat_message(
+                    session_id, question, answer, confidence_score, 
+                    from_cache, processing_time_ms, user_id, session
+                )
+        
+        # Set current timestamp for both required timestamp fields
+        current_time = datetime.utcnow()
         
         chat_message = ChatHistory(
             session_id=session_id,
             question=question,
             answer=answer,
-            timestamp=datetime.utcnow()
+            timestamp=current_time,
+            created_at=current_time,
+            confidence_score=confidence_score,
+            from_cache=from_cache,
+            processing_time_ms=processing_time_ms,
+            user_id=user_id
         )
         
         session.add(chat_message)
@@ -85,11 +104,11 @@ async def get_chat_history(
             async with session_maker() as session:
                 return await get_chat_history(session_id, limit, session)
         
-        # Query chat history ordered by timestamp (most recent last)
+        # Query chat history ordered by created_at (most recent last)
         stmt = (
             select(ChatHistory)
             .where(ChatHistory.session_id == session_id)
-            .order_by(ChatHistory.timestamp.desc())
+            .order_by(ChatHistory.created_at.desc())
             .limit(limit)
         )
         
@@ -154,11 +173,11 @@ async def get_recent_sessions(limit: int = 10) -> List[str]:
     try:
         session_maker = get_async_session()
         async with session_maker() as session:
-            # Get distinct session IDs ordered by most recent timestamp
+            # Get distinct session IDs ordered by most recent created_at
             stmt = (
                 select(ChatHistory.session_id)
                 .distinct()
-                .order_by(ChatHistory.timestamp.desc())
+                .order_by(ChatHistory.created_at.desc())
                 .limit(limit)
             )
             
