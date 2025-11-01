@@ -104,21 +104,33 @@ async def get_chat_history(
             async with session_maker() as session:
                 return await get_chat_history(session_id, limit, session)
         
-        # Query chat history ordered by created_at (most recent last)
+        # Query chat history ordered by created_at (oldest first for chronological order)
         stmt = (
             select(ChatHistory)
             .where(ChatHistory.session_id == session_id)
-            .order_by(ChatHistory.created_at.desc())
+            .order_by(ChatHistory.created_at.asc())
             .limit(limit)
         )
         
         result = await session.execute(stmt)
         messages = result.scalars().all()
         
-        # Reverse to get chronological order (oldest first)
-        messages = list(reversed(messages))
-        
-        return [msg.to_dict() for msg in messages]
+        # Convert to dict format efficiently
+        return [
+            {
+                "id": msg.id,
+                "session_id": msg.session_id,
+                "question": msg.question,
+                "answer": msg.answer,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "confidence_score": msg.confidence_score,
+                "from_cache": msg.from_cache,
+                "processing_time_ms": msg.processing_time_ms,
+                "user_id": msg.user_id
+            }
+            for msg in messages
+        ]
     
     except Exception as e:
         logger.error(f"Error fetching chat history: {e}", exc_info=True)
@@ -173,15 +185,30 @@ async def get_recent_sessions(limit: int = 10) -> List[str]:
     try:
         session_maker = get_async_session()
         async with session_maker() as session:
-            # Get distinct session IDs ordered by most recent created_at
+            # Get distinct session IDs with the most recent created_at for each session
+            from sqlalchemy import func
+            
             stmt = (
                 select(ChatHistory.session_id)
                 .distinct()
-                .order_by(ChatHistory.created_at.desc())
+                .order_by(ChatHistory.session_id)
+            ).subquery()
+            
+            # Then get the most recent session for each
+            final_stmt = (
+                select(stmt.c.session_id)
+                .select_from(
+                    stmt.join(
+                        ChatHistory,
+                        stmt.c.session_id == ChatHistory.session_id
+                    )
+                )
+                .group_by(stmt.c.session_id)
+                .order_by(func.max(ChatHistory.created_at).desc())
                 .limit(limit)
             )
             
-            result = await session.execute(stmt)
+            result = await session.execute(final_stmt)
             session_ids = result.scalars().all()
             return list(session_ids)
     
