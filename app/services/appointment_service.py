@@ -30,44 +30,59 @@ class AppointmentService:
     ) -> List[Dict[str, Any]]:
         """
         Get appointments for a customer
-        
+
         Args:
-            customer_id: Customer ID
-            customer_email: Customer email
+            customer_id: Customer ID (not used - JWT token identifies the user)
+            customer_email: Customer email (not used - JWT token identifies the user)
             appointment_type: Type of appointments ('all', 'available', 'upcoming')
-            auth_token: JWT authentication token
-        
+            auth_token: JWT authentication token (REQUIRED for user identification)
+
         Returns:
-            List of appointment dictionaries
+            List of appointment dictionaries for the authenticated customer only
         """
         try:
-            params = {}
-            if customer_id:
-                params["customerId"] = customer_id
-            if customer_email:
-                params["customerEmail"] = customer_email
-            if appointment_type != "all":
-                params["type"] = appointment_type
-            
+            # Build headers with JWT token for authentication
+            # The backend will automatically filter appointments by the authenticated customer
             headers = {}
             if auth_token:
                 headers["Authorization"] = f"Bearer {auth_token}"
-            
+            else:
+                logger.warning("No auth token provided - appointments will not be filtered")
+
+            # Use customer-specific endpoint that automatically filters by authenticated user
+            # This ensures users can only see their own appointments
+            endpoint_url = f"{self.base_url}/appointments/customer"
+
+            # Note: appointment_type filtering is not yet implemented in the backend
+            # All appointments for the customer will be returned
+            params = {}
+            if appointment_type != "all":
+                # Future: Backend can implement type filtering if needed
+                params["type"] = appointment_type
+
+            logger.info(f"Fetching appointments from: {endpoint_url}")
+
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 async with session.get(
-                    f"{self.chatbot_endpoint}/appointments",
-                    params=params,
+                    endpoint_url,
+                    params=params if params else None,
                     headers=headers
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data.get("data", [])
-                    else:
-                        logger.error(f"Failed to get appointments: {response.status}")
+                        appointments = data.get("data", [])
+                        logger.info(f"Successfully retrieved {len(appointments)} appointments for authenticated customer")
+                        return appointments
+                    elif response.status == 401:
+                        logger.error("Unauthorized: Invalid or missing JWT token")
                         return []
-                        
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to get appointments: {response.status} - {error_text}")
+                        return []
+
         except Exception as e:
-            logger.error(f"Error getting appointments: {e}")
+            logger.error(f"Error getting appointments: {e}", exc_info=True)
             return []
     
     async def get_appointment_details(
@@ -77,33 +92,52 @@ class AppointmentService:
     ) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a specific appointment
-        
+
         Args:
             appointment_id: Appointment ID
-            auth_token: JWT authentication token
-        
+            auth_token: JWT authentication token (REQUIRED for security)
+
         Returns:
-            Appointment details dictionary or None
+            Appointment details dictionary or None if not found or not authorized
         """
         try:
             headers = {}
             if auth_token:
                 headers["Authorization"] = f"Bearer {auth_token}"
-                
+            else:
+                logger.warning("No auth token provided for appointment details")
+
+            # Use the standard appointments endpoint with ID
+            # Backend will verify that the appointment belongs to the authenticated user
+            endpoint_url = f"{self.base_url}/appointments/{appointment_id}"
+
+            logger.info(f"Fetching appointment details from: {endpoint_url}")
+
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 async with session.get(
-                    f"{self.chatbot_endpoint}/appointments/{appointment_id}",
+                    endpoint_url,
                     headers=headers
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
+                        logger.info(f"Successfully retrieved appointment {appointment_id}")
                         return data.get("data", {})
-                    else:
-                        logger.error(f"Failed to get appointment {appointment_id}: {response.status}")
+                    elif response.status == 401:
+                        logger.error(f"Unauthorized: Invalid or missing JWT token for appointment {appointment_id}")
                         return None
-                        
+                    elif response.status == 403:
+                        logger.error(f"Forbidden: User not authorized to view appointment {appointment_id}")
+                        return None
+                    elif response.status == 404:
+                        logger.error(f"Appointment {appointment_id} not found")
+                        return None
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to get appointment {appointment_id}: {response.status} - {error_text}")
+                        return None
+
         except Exception as e:
-            logger.error(f"Error getting appointment {appointment_id}: {e}")
+            logger.error(f"Error getting appointment {appointment_id}: {e}", exc_info=True)
             return None
     
     def format_appointments_for_chat(self, appointments: List[Dict[str, Any]]) -> str:
