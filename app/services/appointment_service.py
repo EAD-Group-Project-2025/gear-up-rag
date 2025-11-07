@@ -49,15 +49,13 @@ class AppointmentService:
             else:
                 logger.warning("No auth token provided - appointments will not be filtered")
 
-            # Use customer-specific endpoint that automatically filters by authenticated user
-            # This ensures users can only see their own appointments
-            endpoint_url = f"{self.base_url}/appointments/customer"
+            # Use the new dedicated chatbot endpoint for current customer
+            # This ensures users can only see their own appointments and provides better error handling
+            endpoint_url = f"{self.chatbot_endpoint}/appointments/current-customer"
 
-            # Note: appointment_type filtering is not yet implemented in the backend
-            # All appointments for the customer will be returned
+            # The new endpoint supports type filtering
             params = {}
             if appointment_type != "all":
-                # Future: Backend can implement type filtering if needed
                 params["type"] = appointment_type
 
             logger.info(f"Fetching appointments from: {endpoint_url}")
@@ -76,6 +74,9 @@ class AppointmentService:
                     elif response.status == 401:
                         logger.error("Unauthorized: Invalid or missing JWT token")
                         return []
+                    elif response.status == 404:
+                        logger.warning("Customer not found or no customer profile associated with user")
+                        return []
                     else:
                         error_text = await response.text()
                         logger.error(f"Failed to get appointments: {response.status} - {error_text}")
@@ -85,6 +86,75 @@ class AppointmentService:
             logger.error(f"Error getting appointments: {e}", exc_info=True)
             return []
     
+    async def book_appointment(
+        self,
+        vehicle_id: int,
+        appointment_date: str,
+        start_time: str,
+        consultation_type: str,
+        customer_issue: str,
+        auth_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Book a new appointment
+
+        Args:
+            vehicle_id: Vehicle ID
+            appointment_date: Date in YYYY-MM-DD format
+            start_time: Start time in HH:MM format
+            consultation_type: Type of consultation
+            customer_issue: Description of the issue
+            auth_token: JWT authentication token (REQUIRED)
+
+        Returns:
+            Appointment booking result
+        """
+        try:
+            headers = {}
+            if auth_token:
+                headers["Authorization"] = f"Bearer {auth_token}"
+            else:
+                logger.error("No auth token provided for booking appointment")
+                return {"error": "Authentication required to book appointments"}
+
+            # Prepare appointment data
+            appointment_data = {
+                "vehicleId": vehicle_id,
+                "appointmentDate": appointment_date,  # Fixed field name
+                "startTime": start_time,
+                "consultationType": consultation_type,
+                "customerIssue": customer_issue
+            }
+
+            endpoint_url = f"{self.base_url}/appointments"
+            logger.info(f"Booking appointment at: {endpoint_url}")
+
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                async with session.post(
+                    endpoint_url,
+                    json=appointment_data,
+                    headers=headers
+                ) as response:
+                    if response.status == 201:
+                        data = await response.json()
+                        logger.info(f"Successfully booked appointment")
+                        return data.get("data", {})
+                    elif response.status == 400:
+                        error_text = await response.text()
+                        logger.error(f"Bad request when booking appointment: {error_text}")
+                        return {"error": error_text}
+                    elif response.status == 401:
+                        logger.error("Unauthorized: Invalid or missing JWT token for booking")
+                        return {"error": "Authentication failed"}
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to book appointment: {response.status} - {error_text}")
+                        return {"error": f"Booking failed: {error_text}"}
+
+        except Exception as e:
+            logger.error(f"Error booking appointment: {e}", exc_info=True)
+            return {"error": str(e)}
+
     async def get_appointment_details(
         self,
         appointment_id: int,
@@ -107,9 +177,9 @@ class AppointmentService:
             else:
                 logger.warning("No auth token provided for appointment details")
 
-            # Use the standard appointments endpoint with ID
+            # Use the chatbot-specific appointments endpoint with ID
             # Backend will verify that the appointment belongs to the authenticated user
-            endpoint_url = f"{self.base_url}/appointments/{appointment_id}"
+            endpoint_url = f"{self.chatbot_endpoint}/appointments/{appointment_id}"
 
             logger.info(f"Fetching appointment details from: {endpoint_url}")
 
@@ -227,6 +297,52 @@ class AppointmentService:
         
         return "\n".join(response_parts)
     
+    async def get_customer_vehicles(
+        self,
+        auth_token: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get vehicles for the authenticated customer
+
+        Args:
+            auth_token: JWT authentication token (REQUIRED)
+
+        Returns:
+            List of vehicles
+        """
+        try:
+            headers = {}
+            if auth_token:
+                headers["Authorization"] = f"Bearer {auth_token}"
+            else:
+                logger.warning("No auth token provided for getting vehicles")
+                return []
+
+            endpoint_url = f"{self.base_url}/vehicles/my-vehicles"
+            logger.info(f"Fetching customer vehicles from: {endpoint_url}")
+
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                async with session.get(
+                    endpoint_url,
+                    headers=headers
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        vehicles = data.get("data", [])
+                        logger.info(f"Successfully retrieved {len(vehicles)} vehicles")
+                        return vehicles
+                    elif response.status == 401:
+                        logger.error("Unauthorized: Invalid or missing JWT token")
+                        return []
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to get vehicles: {response.status} - {error_text}")
+                        return []
+
+        except Exception as e:
+            logger.error(f"Error getting vehicles: {e}", exc_info=True)
+            return []
+
     async def process_appointment_query(
         self,
         query: str,
