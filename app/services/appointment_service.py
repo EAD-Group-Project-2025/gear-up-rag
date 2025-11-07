@@ -20,6 +20,7 @@ class AppointmentService:
         self.base_url = os.getenv("SPRING_BOOT_BASE_URL", "http://localhost:8080/api/v1")
         self.chatbot_endpoint = f"{self.base_url}/chatbot"
         self.timeout = aiohttp.ClientTimeout(total=10)
+        logger.info(f"AppointmentService initialized with base URL: {self.base_url}")
     
     async def get_appointments_for_customer(
         self,

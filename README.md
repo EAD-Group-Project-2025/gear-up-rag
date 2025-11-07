@@ -49,6 +49,39 @@ This service implements a sophisticated RAG pipeline combining:
 - **Chunked Processing**: Incremental content delivery
 - **Session Management**: Persistent conversation tracking
 
+## ⚙️ Environment Configuration
+
+**IMPORTANT**: The application no longer uses hardcoded localhost URLs. All integration URLs must be configured via environment variables.
+
+### Required Environment Variables
+
+```bash
+# AI Service - REQUIRED for chatbot functionality
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Spring Boot Integration - REQUIRED
+SPRING_BOOT_BASE_URL=http://backend:8080/api/v1
+
+# CORS Configuration - REQUIRED
+CORS_ALLOWED_ORIGINS=https://yourdomain.com,http://localhost:3000
+```
+
+### Production Deployment
+
+For production environments, ensure all URLs use proper domain names:
+
+```bash
+# Production example
+SPRING_BOOT_BASE_URL=https://api.yourdomain.com/api/v1
+CORS_ALLOWED_ORIGINS=https://yourdomain.com
+GEMINI_API_KEY=your_production_api_key
+USE_PINECONE=true
+PINECONE_API_KEY=your_pinecone_key
+DEBUG=false
+```
+
+See [Environment Variables Guide](../docs/ENVIRONMENT_VARIABLES.md) for complete configuration details.
+
 ### 📈 Performance Features
 - **Async Processing**: Non-blocking I/O operations
 - **Connection Pooling**: Efficient database connections
