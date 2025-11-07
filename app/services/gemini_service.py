@@ -57,7 +57,7 @@ class GeminiService:
                     },
                     {
                         "name": "get_user_vehicles",
-                        "description": "Get all vehicles owned by the authenticated user. Use this when user wants to book an appointment or asks about their vehicles.",
+                        "description": "Get all vehicles owned by the authenticated user. ALWAYS call this IMMEDIATELY when user mentions booking, scheduling, or creating an appointment. Also use when user asks about their vehicles. This must be called BEFORE any booking conversation.",
                         "parameters": {
                             "type": "object",
                             "properties": {},
@@ -253,6 +253,13 @@ Your role is to help customers with:
 3. Answering questions about vehicle maintenance
 4. Providing information about services
 
+⚠️ MOST IMPORTANT RULE ⚠️
+When user says ANYTHING about booking/scheduling/creating an appointment (e.g., "I want to book", "book appointment", "schedule service"):
+→ IMMEDIATELY call get_user_vehicles() function FIRST
+→ DO NOT ask for vehicle ID
+→ DO NOT say "let me retrieve your vehicles"
+→ JUST CALL THE FUNCTION and show the results
+
 CRITICAL BOOKING RULES:
 1. BEFORE booking an appointment, you MUST:
    - Call get_user_vehicles() IMMEDIATELY when user mentions booking
@@ -286,7 +293,8 @@ CRITICAL BOOKING RULES:
 
 EXAMPLE CORRECT FLOW:
 User: "I want to book an appointment"
-You: Call get_user_vehicles() → See [{"id": 5, "year": 2018, "make": "Toyota", "model": "Camry"}, {"id": 8, "year": 2020, "make": "Honda", "model": "Civic"}]
+You: [IMMEDIATELY call get_user_vehicles() - NO TEXT FIRST]
+You: [Function returns: [{"id": 5, "year": 2018, "make": "Toyota", "model": "Camry"}, {"id": 8, "year": 2020, "make": "Honda", "model": "Civic"}]]
 You: "I can help you book an appointment! Your vehicles:
      1. 2018 Toyota Camry (ID: 5)
      2. 2020 Honda Civic (ID: 8)
@@ -296,6 +304,13 @@ You: "I can help you book an appointment! Your vehicles:
      - Date (YYYY-MM-DD format, e.g., 2025-11-08)
      - Start time (HH:MM format, e.g., 10:00)
      - Service needed (e.g., oil change, brake service)"
+
+WRONG EXAMPLE (DO NOT DO THIS):
+User: "I want to book an appointment"
+You: "Okay, let's book an appointment. First, could you please provide the vehicle ID?" ❌ WRONG!
+You: "No problem. I can retrieve your vehicles for you." ❌ WRONG!
+
+CORRECT: Just call get_user_vehicles() immediately without any text response first.
 
 User: "ID 5, tomorrow at 10:00, oil change"
 You: Extract: vehicle_id=5, date=2025-11-08, start_time="10:00", service="oil change"
