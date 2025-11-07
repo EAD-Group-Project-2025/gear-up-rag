@@ -1,0 +1,78 @@
+name: Deploy RAG API to Azure
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  AZURE_CONTAINER_REGISTRY: gearupacr
+  CONTAINER_APP_NAME: gearup-rag-api
+  RESOURCE_GROUP: rg-gearup-dev
+  IMAGE_NAME: gearup-rag
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Login to ACR
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+    
+    - name: Build Complete
+      run: |
+        echo "Image built and pushed successfully!"
+        echo "Image: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        echo ""
+        echo "MANUAL DEPLOYMENT REQUIRED:"
+        echo "Run the following command to deploy:"
+        echo ""
+        echo "az containerapp update \\"
+        echo "  --name ${{ env.CONTAINER_APP_NAME }} \\"
+        echo "  --resource-group ${{ env.RESOURCE_GROUP }} \\"
+        echo "  --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+    
+    - name: Build image in Azure ACR
+      run: |
+        echo "Building image with tag: ${{ github.sha }}"
+        az acr build \
+          --registry ${{ env.AZURE_CONTAINER_REGISTRY }} \
+          --image ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+          --image ${{ env.IMAGE_NAME }}:latest \
+          --file Dockerfile \
+          .
+    
+    - name: Deploy to Container Apps
+      run: |
+        echo "Deploying to Container Apps..."
+        az containerapp update \
+          --name ${{ env.CONTAINER_APP_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+    
+    - name: Deployment Complete
+      run: |
+        echo "Deployment successful!"
+        APP_URL=$(az containerapp show \
+          --name ${{ env.CONTAINER_APP_NAME }} \
+          --resource-group ${{ env.RESOURCE_GROUP }} \
+          --query properties.configuration.ingress.fqdn \
+          -o tsv)
+        echo "Application URL: https://$APP_URL"
+        echo "Health check: https://$APP_URL/health"
