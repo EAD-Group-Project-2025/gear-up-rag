@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     appointmentDate: Optional[str] = None
     serviceType: Optional[str] = None
     customerId: Optional[int] = None
+    userId: Optional[int] = None  # User ID for session filtering
     customerEmail: Optional[str] = None
     authToken: Optional[str] = None
 

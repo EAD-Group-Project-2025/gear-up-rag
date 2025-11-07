@@ -37,11 +37,12 @@ class RAGService:
         filters: Optional[Dict[str, Any]] = None,
         customer_id: Optional[int] = None,
         customer_email: Optional[str] = None,
-        auth_token: Optional[str] = None
+        auth_token: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> ChatResponse:
         """
         Process user query with RAG
-        
+
         Args:
             question: User question
             session_id: Session identifier
@@ -50,7 +51,8 @@ class RAGService:
             customer_id: Customer ID for appointment queries
             customer_email: Customer email for appointment queries
             auth_token: JWT token for API authentication
-        
+            user_id: User ID for session filtering and saving
+
         Returns:
             ChatResponse with answer and metadata
         """
@@ -175,7 +177,7 @@ class RAGService:
                     confidence_score=0.95,
                     from_cache=False,
                     processing_time_ms=processing_time,
-                    user_id=customer_id
+                    user_id=user_id
                 )
 
                 return ChatResponse(
@@ -200,7 +202,7 @@ class RAGService:
                     confidence_score=0.8,
                     from_cache=False,
                     processing_time_ms=processing_time,
-                    user_id=customer_id
+                    user_id=user_id
                 )
 
                 return ChatResponse(

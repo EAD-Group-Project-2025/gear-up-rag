@@ -121,7 +121,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             },
             customer_id=getattr(request, 'customerId', None),
             customer_email=getattr(request, 'customerEmail', None),
-            auth_token=getattr(request, 'authToken', None)
+            auth_token=getattr(request, 'authToken', None),
+            user_id=getattr(request, 'userId', None)
         )
         
         return response
@@ -249,6 +250,7 @@ async def get_chat_sessions(
 
         # Filter by user_id if provided for security
         sessions = await get_recent_sessions(limit=limit, user_id=user_id)
+        logger.info(f"Found {len(sessions)} sessions for user_id: {user_id}")
         
         # For now, return basic session info
         # In production, you'd want to include session metadata, titles, etc.
