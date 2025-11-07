@@ -144,58 +144,94 @@ class VectorDBService:
         self,
         query: str,
         top_k: int = 5,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        customer_email: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Search for similar documents
-        
+        Search for similar documents with customer isolation
+
         Args:
             query: Search query
             top_k: Number of results to return
             filters: Optional metadata filters
-        
+            customer_email: Customer email for data isolation (REQUIRED for security)
+
         Returns:
-            List of matching documents with scores
+            List of matching documents with scores (filtered by customer)
         """
         try:
             # Generate query embedding
             query_embedding = self.embedding_model.encode([query], convert_to_numpy=True)[0]
-            
+
             if self.vector_db_type == "pinecone":
-                # Search Pinecone
+                # Add customer filter for Pinecone
+                if customer_email:
+                    if filters is None:
+                        filters = {}
+                    filters["customer_email"] = customer_email
+
+                # Search Pinecone with customer filter
                 results = self.index.query(
                     vector=query_embedding.tolist(),
-                    top_k=top_k,
+                    top_k=top_k * 2,  # Get more results for post-filtering
                     filter=filters,
                     include_metadata=True
                 )
-                
-                return [
-                    {
-                        "text": match["metadata"].get("text", ""),
-                        "score": match["score"],
-                        "metadata": match["metadata"]
-                    }
-                    for match in results["matches"]
-                ]
-            
+
+                # Additional security: Post-filter by customer email
+                filtered_results = []
+                for match in results["matches"]:
+                    metadata = match.get("metadata", {})
+                    # Only include results for the authenticated customer
+                    if not customer_email or metadata.get("customer_email") == customer_email:
+                        filtered_results.append({
+                            "text": metadata.get("text", ""),
+                            "score": match["score"],
+                            "metadata": metadata
+                        })
+                        if len(filtered_results) >= top_k:
+                            break
+
+                logger.info(f"Vector search returned {len(filtered_results)} results for customer: {customer_email}")
+                return filtered_results
+
             else:  # FAISS
-                # Search FAISS
+                # Search FAISS (get more results for filtering)
                 distances, indices = self.index.search(
                     query_embedding.reshape(1, -1),
-                    top_k
+                    min(top_k * 3, self.index.ntotal)  # Get more for post-filtering
                 )
-                
+
                 results = []
                 for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
                     if idx < len(self.metadata_store):
                         metadata = self.metadata_store[idx]
+
+                        # CRITICAL: Filter by customer email for data isolation
+                        if customer_email and metadata.get("customer_email") != customer_email:
+                            logger.debug(f"Filtered out result for different customer: {metadata.get('customer_email')}")
+                            continue  # Skip results from other customers
+
+                        # Apply additional filters if provided
+                        if filters:
+                            matches_filters = all(
+                                metadata.get(key) == value
+                                for key, value in filters.items()
+                            )
+                            if not matches_filters:
+                                continue
+
                         results.append({
                             "text": metadata.get("text", ""),
                             "score": float(1.0 / (1.0 + distance)),  # Convert distance to similarity
                             "metadata": metadata
                         })
-                
+
+                        # Stop when we have enough results
+                        if len(results) >= top_k:
+                            break
+
+                logger.info(f"Vector search returned {len(results)} results for customer: {customer_email}")
                 return results
         
         except Exception as e:
