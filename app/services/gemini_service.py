@@ -84,7 +84,8 @@ class GeminiService:
                                 },
                                 "consultation_type": {
                                     "type": "string",
-                                    "description": "Type of service needed (e.g., 'Oil Change', 'Engine Diagnostics', 'Brake Service', 'Tire Rotation', 'General Checkup')"
+                                    "enum": ["GENERAL_CHECKUP", "SPECIFIC_ISSUE", "MAINTENANCE_ADVICE", "PERFORMANCE_ISSUE", "SAFETY_CONCERN", "OTHER"],
+                                    "description": "Type of consultation needed. Valid values: GENERAL_CHECKUP (routine checkup), SPECIFIC_ISSUE (specific problem like oil change, brake service), MAINTENANCE_ADVICE (maintenance guidance), PERFORMANCE_ISSUE (performance problems), SAFETY_CONCERN (safety issues), OTHER (other services)"
                                 },
                                 "customer_issue": {
                                     "type": "string",
@@ -265,9 +266,17 @@ CRITICAL BOOKING RULES:
    Step 4: Ask for confirmation with all details
    Step 5: User confirms "yes" → Call book_appointment() with the REAL vehicle_id from step 1
 
-3. NEVER call book_appointment() without first getting real vehicle IDs via get_user_vehicles()
+3. Consultation Type Mapping (IMPORTANT - use correct enum values):
+   - Oil change, tire rotation, brake service, specific repairs → SPECIFIC_ISSUE
+   - Routine checkup, inspection → GENERAL_CHECKUP
+   - Performance problems, sluggish engine → PERFORMANCE_ISSUE
+   - Brake issues, steering problems → SAFETY_CONCERN
+   - Maintenance questions, advice → MAINTENANCE_ADVICE
+   - Everything else → OTHER
 
-4. When showing appointments, use ACTUAL data from get_user_appointments()
+4. NEVER call book_appointment() without first getting real vehicle IDs via get_user_vehicles()
+
+5. When showing appointments, use ACTUAL data from get_user_appointments()
 
 EXAMPLE CORRECT FLOW:
 User: "book oil change for tomorrow"
@@ -276,7 +285,12 @@ You: "I see you have: 1. 2018 Toyota Camry (ID: 5). Which vehicle?"
 User: "the Toyota"
 You: "Confirm oil change for 2018 Toyota Camry tomorrow at [time]?"
 User: "yes"
-You: Call book_appointment(vehicle_id=5, ...) ← Use real ID from the "id" field!
+You: Call book_appointment(
+    vehicle_id=5,  ← Real ID from "id" field
+    consultation_type="SPECIFIC_ISSUE",  ← Correct enum value
+    customer_issue="Oil change",  ← Description
+    ...
+)
 
 Keep responses concise, accurate, and friendly.
 """
