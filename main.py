@@ -121,7 +121,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             },
             customer_id=getattr(request, 'customerId', None),
             customer_email=getattr(request, 'customerEmail', None),
-            auth_token=getattr(request, 'authToken', None)
+            auth_token=getattr(request, 'authToken', None),
+            user_id=getattr(request, 'userId', None)
         )
         
         return response
@@ -227,25 +228,29 @@ async def clear_chat_history(session_id: str):
 @app.get("/chat/sessions")
 async def get_chat_sessions(
     customer_email: Optional[str] = None,
+    user_id: Optional[int] = None,
     limit: int = 20
 ):
     """
     Get chat sessions for a customer
-    
+
     Args:
-        customer_email: Customer email to filter sessions
+        customer_email: Customer email to filter sessions (for display purposes)
+        user_id: User ID to filter sessions (for actual filtering)
         limit: Maximum number of sessions to return
-    
+
     Returns:
         List of chat sessions
     """
     try:
-        logger.info(f"Getting chat sessions for customer: {customer_email}")
-        
+        logger.info(f"Getting chat sessions for customer: {customer_email}, user_id: {user_id}")
+
         # Import here to avoid circular imports
         from app.database.chat_history_db import get_recent_sessions
-        
-        sessions = await get_recent_sessions(limit=limit)
+
+        # Filter by user_id if provided for security
+        sessions = await get_recent_sessions(limit=limit, user_id=user_id)
+        logger.info(f"Found {len(sessions)} sessions for user_id: {user_id}")
         
         # For now, return basic session info
         # In production, you'd want to include session metadata, titles, etc.

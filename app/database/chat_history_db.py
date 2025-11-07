@@ -1,7 +1,7 @@
 """Database operations for chat history"""
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
@@ -172,13 +172,14 @@ async def clear_chat_history(
         raise
 
 
-async def get_recent_sessions(limit: int = 10) -> List[str]:
+async def get_recent_sessions(limit: int = 10, user_id: Optional[int] = None) -> List[str]:
     """
     Get list of recent session IDs
-    
+
     Args:
         limit: Maximum number of sessions to return
-    
+        user_id: Optional user ID to filter sessions
+
     Returns:
         List of session IDs
     """
@@ -187,13 +188,17 @@ async def get_recent_sessions(limit: int = 10) -> List[str]:
         async with session_maker() as session:
             # Get distinct session IDs with the most recent created_at for each session
             from sqlalchemy import func
-            
-            stmt = (
-                select(ChatHistory.session_id)
-                .distinct()
-                .order_by(ChatHistory.session_id)
-            ).subquery()
-            
+
+            # Base query for distinct sessions
+            base_query = select(ChatHistory.session_id).distinct()
+
+            # Filter by user_id if provided
+            if user_id is not None:
+                base_query = base_query.where(ChatHistory.user_id == user_id)
+
+            base_query = base_query.order_by(ChatHistory.session_id)
+            stmt = base_query.subquery()
+
             # Then get the most recent session for each
             final_stmt = (
                 select(stmt.c.session_id)
@@ -207,7 +212,7 @@ async def get_recent_sessions(limit: int = 10) -> List[str]:
                 .order_by(func.max(ChatHistory.created_at).desc())
                 .limit(limit)
             )
-            
+
             result = await session.execute(final_stmt)
             session_ids = result.scalars().all()
             return list(session_ids)

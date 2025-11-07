@@ -111,6 +111,7 @@ Notes: {apt.notes or 'None'}
                         "date": str(apt.date),
                         "status": apt.status,
                         "customer_name": apt.customer_name,
+                        "customer_email": apt.customer_email,  # CRITICAL: For customer isolation
                         "vehicle": f"{apt.year} {apt.make} {apt.model}",
                         "source": f"Appointment #{apt.appointment_id}",
                         "text": apt_text.strip()
