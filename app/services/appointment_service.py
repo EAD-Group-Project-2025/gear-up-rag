@@ -101,7 +101,7 @@ class AppointmentService:
         Args:
             vehicle_id: Vehicle ID
             appointment_date: Date in YYYY-MM-DD format
-            start_time: Start time in HH:MM format
+            start_time: Start time in HH:MM:SS or HH:MM format (end time automatically calculated as +1 hour)
             consultation_type: Type of consultation
             customer_issue: Description of the issue
             auth_token: JWT authentication token (REQUIRED)
